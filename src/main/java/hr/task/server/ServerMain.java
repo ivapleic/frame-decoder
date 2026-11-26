@@ -61,15 +61,24 @@ public class ServerMain {
      */
     static void serve(ServerSocket serverSocket, Writer out) throws IOException {
         while (!serverSocket.isClosed()) {
-            try (Socket socket = serverSocket.accept()) {
-                System.out.println("Client connected");
-                handleClient(socket.getInputStream(), out);
+            try {
+                acceptOne(serverSocket, out);
             } catch (SocketException e) {
                 if (serverSocket.isClosed()) {
                     return;   // closed on purpose, that's a normal stop
                 }
                 throw e;
             }
+        }
+    }
+
+    /**
+     * Waits for one client and handles it until it is done.
+     */
+    static void acceptOne(ServerSocket serverSocket, Writer out) throws IOException {
+        try (Socket socket = serverSocket.accept()) {
+            System.out.println("Client connected");
+            handleClient(socket.getInputStream(), out);
         }
     }
 
