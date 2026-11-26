@@ -15,17 +15,17 @@ public final class FrameReader {
      * before a new frame started (normal end).
      */
     public static byte[] readFrame(InputStream in) throws IOException {
-        int first = in.read();
-        if (first == -1) {
+        int highByte = in.read();
+        if (highByte == -1) {
             return null;
         }
 
-        int second = in.read();
-        if (second == -1) {
+        int lowByte = in.read();
+        if (lowByte == -1) {
             throw new InvalidFrameException("Truncated header: expected 2 bytes, got 1");
         }
 
-        int length = (first << 8) | second;
+        int length = (highByte << 8) | lowByte;
         checkLength(length);
 
         byte[] payload = in.readNBytes(length);

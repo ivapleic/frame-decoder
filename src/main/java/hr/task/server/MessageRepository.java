@@ -50,9 +50,9 @@ public class MessageRepository implements AutoCloseable {
     }
 
     private static String loadSchema() {
-        try (InputStream in = MessageRepository.class.getResourceAsStream("/db-schema.sql")) {   // <- changed
+        try (InputStream in = MessageRepository.class.getResourceAsStream("/db-schema.sql")) {
             if (in == null) {
-                throw new IllegalStateException("db-schema.sql not found on classpath");          // <- changed
+                throw new IllegalStateException("db-schema.sql not found on classpath");
             }
             return new String(in.readAllBytes(), StandardCharsets.UTF_8);
         } catch (IOException e) {

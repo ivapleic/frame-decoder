@@ -20,6 +20,6 @@ public final class FrameWriter {
         out.write(length >> 8);      // high byte
         out.write(length & 0xFF);    // low byte
         out.write(payload);
-        out.flush();                 // send right away, don't wait in the buffer
+        out.flush();
     }
 }

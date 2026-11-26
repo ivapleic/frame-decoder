@@ -19,22 +19,30 @@ public class ServerMain {
 
     private static final Charset INPUT_CHARSET = Charset.forName("ISO-8859-2");
 
+    private static final int DEFAULT_PORT = 5000;
+    private static final String DEFAULT_OUTPUT_FILE = "output.txt";
+    private static final String DEFAULT_DATABASE_FILE = "transactions.db";
+
     public static void main(String[] args) {
-        if (args.length != 3) {
-            System.err.println("Usage: ServerMain <port> <outputFile> <databaseFile>");
+        if (args.length > 3) {
+            System.err.println("Usage: ServerMain [port] [outputFile] [databaseFile]");
+            System.err.println("Defaults: " + DEFAULT_PORT + " " + DEFAULT_OUTPUT_FILE
+                    + " " + DEFAULT_DATABASE_FILE);
             System.exit(1);
         }
 
-        int port;
-        try {
-            port = Integer.parseInt(args[0]);
-        } catch (NumberFormatException e) {
-            System.err.println("Port must be a number, got: " + args[0]);
-            System.exit(1);
-            return;
+        int port = DEFAULT_PORT;
+        if (args.length > 0) {
+            try {
+                port = Integer.parseInt(args[0]);
+            } catch (NumberFormatException e) {
+                System.err.println("Port must be a number, got: " + args[0]);
+                System.exit(1);
+                return;
+            }
         }
-        Path outputFile = Path.of(args[1]);
-        Path databaseFile = Path.of(args[2]);
+        Path outputFile = Path.of(args.length > 1 ? args[1] : DEFAULT_OUTPUT_FILE);
+        Path databaseFile = Path.of(args.length > 2 ? args[2] : DEFAULT_DATABASE_FILE);
 
         try {
             run(port, outputFile, databaseFile);
