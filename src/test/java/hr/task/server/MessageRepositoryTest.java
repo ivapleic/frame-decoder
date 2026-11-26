@@ -49,8 +49,11 @@ class MessageRepositoryTest {
         assertEquals(List.of("PAYMENT|1|1.00|EUR", "REFUND|2|2.00|EUR"), readRows(url));
     }
 
-    /** Reads the rows with a separate connection, the way someone else would look at the table. */
-    private static List<String> readRows(String url) throws SQLException {
+    /**
+     * Reads the rows with a separate connection, the way someone else would look at the table.
+     * Not private, because the integration test uses it too.
+     */
+    static List<String> readRows(String url) throws SQLException {
         List<String> rows = new ArrayList<>();
         try (Connection connection = DriverManager.getConnection(url);
              Statement statement = connection.createStatement();

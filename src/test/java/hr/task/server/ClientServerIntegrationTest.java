@@ -23,33 +23,41 @@ class ClientServerIntegrationTest {
 
     @Test
     void croatianSampleIsConvertedToUtf8() throws Exception {
-        runFlow(Path.of("sample-data/sample-input-hr.bin"), List.of(
-                "UPLATA|ČĆŽŠĐ|100.50|HRK",
-                "STORNO|žćčšđ|42.00|EUR",
-                "KRAJ"));
+        runFlow(Path.of("sample-data/sample-input-hr.bin"),
+                List.of("UPLATA|ČĆŽŠĐ|100.50|HRK",
+                        "STORNO|žćčšđ|42.00|EUR",
+                        "KRAJ"),
+                // KRAJ is not a transaction, so it is not stored in the database
+                List.of("UPLATA|ČĆŽŠĐ|100.50|HRK",
+                        "STORNO|žćčšđ|42.00|EUR"));
     }
 
     @Test
     void asciiSampleIsWrittenUnchanged() throws Exception {
-        runFlow(Path.of("sample-data/sample-input-ascii.bin"), List.of(
-                "PAYMENT|12345|100.50|HRK",
-                "REFUND|98765|42.00|EUR",
-                "END"));
+        runFlow(Path.of("sample-data/sample-input-ascii.bin"),
+                List.of("PAYMENT|12345|100.50|HRK",
+                        "REFUND|98765|42.00|EUR",
+                        "END"),
+                List.of("PAYMENT|12345|100.50|HRK",
+                        "REFUND|98765|42.00|EUR"));
     }
 
     /**
-     * Starts the server, sends the input file with the client
-     * and checks the lines the server wrote to its output file.
+     * Starts the server, sends the input file with the client and checks
+     * the lines in the output file and the rows in the database.
      */
-    private void runFlow(Path inputFile, List<String> expectedLines) throws Exception {
+    private void runFlow(Path inputFile, List<String> expectedLines, List<String> expectedDbRows)
+            throws Exception {
         Path outputFile = tempDir.resolve("output.txt");
+        String databaseUrl = "jdbc:sqlite:" + tempDir.resolve("test.db");
 
         try (ServerSocket serverSocket = new ServerSocket(0);   // 0 = pick any free port
-             Writer out = Files.newBufferedWriter(outputFile, StandardCharsets.UTF_8)) {
+             Writer out = Files.newBufferedWriter(outputFile, StandardCharsets.UTF_8);
+             MessageRepository repository = new MessageRepository(databaseUrl)) {
 
             Thread serverThread = new Thread(() -> {
                 try {
-                    ServerMain.acceptOne(serverSocket, out);
+                    ServerMain.acceptOne(serverSocket, out, repository);
                 } catch (IOException e) {
                     throw new UncheckedIOException(e);
                 }
@@ -62,7 +70,8 @@ class ClientServerIntegrationTest {
             assertFalse(serverThread.isAlive(), "server did not finish in time");
         }
 
-        // the writer is closed here, so the file is complete
+        // everything is closed here, so the file and the database are complete
         assertEquals(expectedLines, Files.readAllLines(outputFile, StandardCharsets.UTF_8));
+        assertEquals(expectedDbRows, MessageRepositoryTest.readRows(databaseUrl));
     }
 }

@@ -13,15 +13,15 @@ import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-
+import java.sql.SQLException;
 
 public class ServerMain {
 
     private static final Charset INPUT_CHARSET = Charset.forName("ISO-8859-2");
 
     public static void main(String[] args) {
-        if (args.length != 2) {
-            System.err.println("Usage: ServerMain <port> <outputFile>");
+        if (args.length != 3) {
+            System.err.println("Usage: ServerMain <port> <outputFile> <databaseFile>");
             System.exit(1);
         }
 
@@ -34,35 +34,38 @@ public class ServerMain {
             return;
         }
         Path outputFile = Path.of(args[1]);
+        Path databaseFile = Path.of(args[2]);
 
         try {
-            run(port, outputFile);
-        } catch (IOException e) {
+            run(port, outputFile, databaseFile);
+        } catch (IOException | SQLException e) {
             System.err.println("Server error: " + e.getMessage());
             System.exit(3);
         }
     }
 
     /**
-     * Opens the server socket and the output file, then serves clients.
-     * The output file is created (or emptied) when the server starts.
+     * Opens the server socket, the output file and the database, then serves clients.
+     * The output file is emptied on start, the database keeps rows from earlier runs.
      */
-    static void run(int port, Path outputFile) throws IOException {
+    static void run(int port, Path outputFile, Path databaseFile) throws IOException, SQLException {
         try (ServerSocket serverSocket = new ServerSocket(port);
-             Writer out = Files.newBufferedWriter(outputFile, StandardCharsets.UTF_8)) {
+             Writer out = Files.newBufferedWriter(outputFile, StandardCharsets.UTF_8);
+             MessageRepository repository = new MessageRepository("jdbc:sqlite:" + databaseFile)) {
 
-            System.out.println("Listening on port " + port + ", writing to " + outputFile);
-            serve(serverSocket, out);
+            System.out.println("Listening on port " + port
+                    + ", writing to " + outputFile + " and " + databaseFile);
+            serve(serverSocket, out, repository);
         }
     }
 
     /**
      * Handles clients one after another until the server socket is closed.
      */
-    static void serve(ServerSocket serverSocket, Writer out) throws IOException {
+    static void serve(ServerSocket serverSocket, Writer out, MessageRepository repository) throws IOException {
         while (!serverSocket.isClosed()) {
             try {
-                acceptOne(serverSocket, out);
+                acceptOne(serverSocket, out, repository);
             } catch (SocketException e) {
                 if (serverSocket.isClosed()) {
                     return;   // closed on purpose, that's a normal stop
@@ -75,18 +78,18 @@ public class ServerMain {
     /**
      * Waits for one client and handles it until it is done.
      */
-    static void acceptOne(ServerSocket serverSocket, Writer out) throws IOException {
+    static void acceptOne(ServerSocket serverSocket, Writer out, MessageRepository repository) throws IOException {
         try (Socket socket = serverSocket.accept()) {
             System.out.println("Client connected");
-            handleClient(socket.getInputStream(), out);
+            handleClient(socket.getInputStream(), out, repository);
         }
     }
 
     /**
      * Reads frames from one client until it is done or sends something invalid.
-     * Every message is decoded (ISO-8859-2) and written as one UTF-8 line.
+     * Every message is decoded (ISO-8859-2), written as one UTF-8 line and stored in the database.
      */
-    static void handleClient(InputStream in, Writer out) {
+    static void handleClient(InputStream in, Writer out, MessageRepository repository) {
         try {
             byte[] payload;
             while ((payload = FrameReader.readFrame(in)) != null) {
@@ -94,12 +97,27 @@ public class ServerMain {
                 out.write(text);
                 out.write('\n');
                 out.flush();   // so the file is complete even while the server keeps running
+
+                storeInDatabase(text, repository);
             }
             System.out.println("Client finished");
         } catch (InvalidFrameException e) {
             System.err.println("Invalid frame: " + e.getMessage());
         } catch (IOException e) {
             System.err.println("I/O error: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Messages that are not 4-field transactions (like END or KRAJ) stay only in the file.
+     */
+    private static void storeInDatabase(String text, MessageRepository repository) {
+        try {
+            repository.save(MessageParser.parse(text));
+        } catch (IllegalArgumentException e) {
+            System.err.println("Not stored in database: " + e.getMessage() + " (message: " + text + ")");
+        } catch (SQLException e) {
+            System.err.println("Database error: " + e.getMessage());
         }
     }
 }
