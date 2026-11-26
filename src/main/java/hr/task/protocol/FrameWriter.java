@@ -14,11 +14,8 @@ public final class FrameWriter {
     public static void writeFrame(OutputStream out, byte[] payload) throws IOException {
         int length = payload.length;
 
-        // same limits as the reader, so we never send an invalid frame
-        if (length < 1 || length > FrameReader.MAX_PAYLOAD) {
-            throw new InvalidFrameException(
-                    "Invalid payload length " + length + " (allowed 1 to " + FrameReader.MAX_PAYLOAD + ")");
-        }
+        // same rule as the reader, so we never send an invalid frame
+        FrameReader.checkLength(length);
 
         out.write(length >> 8);      // high byte
         out.write(length & 0xFF);    // low byte
