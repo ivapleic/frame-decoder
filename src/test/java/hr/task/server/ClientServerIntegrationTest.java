@@ -5,12 +5,12 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.io.IOException;
-import java.io.UncheckedIOException;
 import java.io.Writer;
 import java.net.ServerSocket;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.sql.SQLException;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -58,8 +58,8 @@ class ClientServerIntegrationTest {
             Thread serverThread = new Thread(() -> {
                 try {
                     ServerMain.acceptOne(serverSocket, out, repository);
-                } catch (IOException e) {
-                    throw new UncheckedIOException(e);
+                } catch (IOException | SQLException e) {
+                    throw new RuntimeException(e);
                 }
             });
             serverThread.start();

@@ -1,5 +1,6 @@
 package hr.task.server;
 
+import hr.task.model.TransactionMessage;
 import hr.task.protocol.FrameReader;
 import hr.task.protocol.InvalidFrameException;
 
@@ -46,7 +47,10 @@ public class ServerMain {
 
         try {
             run(port, outputFile, databaseFile);
-        } catch (IOException | SQLException e) {
+        } catch (SQLException e) {
+            System.err.println("Database error, server stopped: " + e.getMessage());
+            System.exit(3);
+        } catch (IOException e) {
             System.err.println("Server error: " + e.getMessage());
             System.exit(3);
         }
@@ -70,7 +74,8 @@ public class ServerMain {
     /**
      * Handles clients one after another until the server socket is closed.
      */
-    static void serve(ServerSocket serverSocket, Writer out, MessageRepository repository) throws IOException {
+    static void serve(ServerSocket serverSocket, Writer out, MessageRepository repository)
+            throws IOException, SQLException {
         while (!serverSocket.isClosed()) {
             try {
                 acceptOne(serverSocket, out, repository);
@@ -86,7 +91,8 @@ public class ServerMain {
     /**
      * Waits for one client and handles it until it is done.
      */
-    static void acceptOne(ServerSocket serverSocket, Writer out, MessageRepository repository) throws IOException {
+    static void acceptOne(ServerSocket serverSocket, Writer out, MessageRepository repository)
+            throws IOException, SQLException {
         try (Socket socket = serverSocket.accept()) {
             System.out.println("Client connected");
             handleClient(socket.getInputStream(), out, repository);
@@ -95,18 +101,22 @@ public class ServerMain {
 
     /**
      * Reads frames from one client until it is done or sends something invalid.
-     * Every message is decoded (ISO-8859-2), written as one UTF-8 line and stored in the database.
+     * Every message is decoded (ISO-8859-2), stored in the database and written
+     * as one UTF-8 line. A database error is not caught here, it stops the server.
      */
-    static void handleClient(InputStream in, Writer out, MessageRepository repository) {
+    static void handleClient(InputStream in, Writer out, MessageRepository repository)
+            throws SQLException {
         try {
             byte[] payload;
             while ((payload = FrameReader.readFrame(in)) != null) {
                 String text = new String(payload, INPUT_CHARSET);
+
+                // database first: if it fails nothing is written, so file and database stay in sync
+                storeInDatabase(text, repository);
+
                 out.write(text);
                 out.write('\n');
                 out.flush();   // so the file is complete even while the server keeps running
-
-                storeInDatabase(text, repository);
             }
             System.out.println("Client finished");
         } catch (InvalidFrameException e) {
@@ -118,14 +128,16 @@ public class ServerMain {
 
     /**
      * Messages that are not 4-field transactions (like END or KRAJ) stay only in the file.
+     * A real database failure is passed on, so the server stops instead of losing data silently.
      */
-    private static void storeInDatabase(String text, MessageRepository repository) {
+    private static void storeInDatabase(String text, MessageRepository repository) throws SQLException {
+        TransactionMessage message;
         try {
-            repository.save(MessageParser.parse(text));
+            message = MessageParser.parse(text);
         } catch (IllegalArgumentException e) {
             System.err.println("Not stored in database: " + e.getMessage() + " (message: " + text + ")");
-        } catch (SQLException e) {
-            System.err.println("Database error: " + e.getMessage());
+            return;
         }
+        repository.save(message);
     }
 }
